@@ -37,10 +37,16 @@ import {
   generateSEOMetadata,
   categorizeNews,
   setCustomApiKeyForGemini,
-  setCustomApiKeyForOpenAi,
-  setPreferredModel
 } from './services/geminiService';
 import { clearAppCache } from './services/cacheService';
+import { useAuthSession } from './src/client/features/auth/useAuthSession';
+import { api } from './src/client/api/apiClient';
+import { useWorkspaceInput } from './src/client/features/workspace/useWorkspaceInput';
+import { useLibraryFeature } from './src/client/features/library/useLibraryFeature';
+import { useCorrectionsFeature } from './src/client/features/corrections/useCorrectionsFeature';
+import { useVocabularyFeature } from './src/client/features/admin/useVocabularyFeature';
+import { useGenerationWorkflow } from './src/client/features/workspace/useGenerationWorkflow';
+import { useGenerationState } from './src/client/features/workspace/useGenerationState';
 import { 
   Menu, 
   X, 
@@ -68,82 +74,62 @@ import {
 import { 
   getOrCreateUserProfile, 
   updateUserApiKey, 
-  updateUserOpenAiKey,
-  consumeSystemCredit, 
-  UserProfile,
-  googleSignIn,
-  logoutGoogle,
   auth
 } from './services/firebaseService';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut,
-  signInWithPopup,
-  GoogleAuthProvider
-} from 'firebase/auth';
 
 const App: React.FC = () => {
-  // Authentication & Profile states
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
-  const [authEmail, setAuthEmail] = useState<string>('');
-  const [authPassword, setAuthPassword] = useState<string>('');
-  const [isSignUpMode, setIsSignUpMode] = useState<boolean>(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-
   // Modals visibility states
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [isPolicyOpen, setIsPolicyOpen] = useState<boolean>(false);
   const [isTipsOpen, setIsTipsOpen] = useState<boolean>(false);
   const [tipsActiveTab, setTipsActiveTab] = useState<ModuleTipType>('file');
-  const [tempApiKey, setTempApiKey] = useState<string>('');
-  const [tempOpenAiKey, setTempOpenAiKey] = useState<string>('');
-  const [preferredModel, setPreferredModelLocal] = useState<'gemini' | 'gemini-pro' | 'gemini-2.5-flash' | 'openai'>('gemini');
-
-  useEffect(() => {
-    setPreferredModel(preferredModel);
-  }, [preferredModel]);
-
-  // Primary application states
-  const [selectedInputMode, setSelectedInputMode] = useState<InputMode>(InputMode.FILE);
-  const [selectedScriptLength, setSelectedScriptLength] = useState<ScriptLength>(ScriptLength.STANDARD);
-  const [selectedScriptTone, setSelectedScriptTone] = useState<ScriptTone>(ScriptTone.FORMAL);
-  const [selectedScriptType, setSelectedScriptType] = useState<ScriptType>(ScriptType.WEB_POST);
   
-  const [fileContent, setFileContent] = useState<string>('');
-  const [urlInput, setUrlInput] = useState<string>('');
-  const [englishUrlInput, setEnglishUrlInput] = useState<string>('');
-  const [reportInput, setReportInput] = useState<string>('');
-  const [pastedTextInput, setPastedTextInput] = useState<string>('');
-  
-  const [reportTargetLanguage, setReportTargetLanguage] = useState<'Burmese' | 'English'>('Burmese');
-  const [reportStatistics, setReportStatistics] = useState<any[] | null>(null);
-  const [reportChartData, setReportChartData] = useState<any[] | null>(null);
-  const [reportChartTitle, setReportChartTitle] = useState<string | null>(null);
-  const [reportChartType, setReportChartType] = useState<string | null>(null);
-  
-  const [generatedScript, setGeneratedScript] = useState<string | null>(null);
-  const [intermediateTranslation, setIntermediateTranslation] = useState<string | null>(null);
-  const [groundingSources, setGroundingSources] = useState<GroundingChunk[] | null>(null);
-  const [proofreadScriptContent, setProofreadScriptContent] = useState<string | null>(null);
-  const [extractedKeywords, setExtractedKeywords] = useState<string[] | null>(null);
-  const [seoData, setSeoData] = useState<SEOData | null>(null);
-  const [category, setCategory] = useState<string | null>(null);
+  const { state: generationState, actions: generationActions, resetOutputs } = useGenerationState();
+  const {
+    generatedScript,
+    intermediateTranslation,
+    groundingSources,
+    proofreadScriptContent,
+    extractedKeywords,
+    seoData,
+    category,
+    reportStatistics,
+    reportChartData,
+    reportChartTitle,
+    reportChartType,
+    isLoading,
+    isProofreading,
+    isExtractingKeywords,
+    cooldownRemaining,
+    error,
+    wasServedFromCache,
+    scrapeMethod,
+    scrapeNotice,
+  } = generationState;
+  const {
+    setGeneratedScript,
+    setIntermediateTranslation,
+    setGroundingSources,
+    setProofreadScriptContent,
+    setExtractedKeywords,
+    setSeoData,
+    setCategory,
+    setReportStatistics,
+    setReportChartData,
+    setReportChartTitle,
+    setReportChartType,
+    setIsLoading,
+    setIsProofreading,
+    setIsExtractingKeywords,
+    setCooldownRemaining,
+    setError,
+    setWasServedFromCache,
+    setScrapeMethod,
+    setScrapeNotice,
+  } = generationActions;
   const [useSEO, setUseSEO] = useState<boolean>(false);
-  
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [queueStatus, setQueueStatus] = useState<any>(null);
-  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-  const [isProofreading, setIsProofreading] = useState<boolean>(false);
-  const [isExtractingKeywords, setIsExtractingKeywords] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [wasServedFromCache, setWasServedFromCache] = useState<boolean>(false);
-  const [scrapeMethod, setScrapeMethod] = useState<string | null>(null);
-  const [scrapeNotice, setScrapeNotice] = useState<string | null>(null);
 
   // New UI enhancements & Tabs
   const [activeTab, setActiveTab] = useState<'workspace' | 'library' | 'corrections' | 'guide' | 'admin'>('workspace');
@@ -155,97 +141,42 @@ const App: React.FC = () => {
     styleOptions: true,
     seoOptions: true
   });
-  
-  // Storage arrays fetched from Cloud SQL
+
+  // Shared account credit data used by the shell and token monitor.
   const [userProfileData, setUserProfileData] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState<boolean>(false);
-  const [savedScripts, setSavedScripts] = useState<any[]>([]);
-  const [scriptsLoading, setScriptsLoading] = useState<boolean>(false);
-
-  // Corrections state variables
-  const [userCorrectionsList, setUserCorrectionsList] = useState<any[]>([]);
-  const [correctionsLoading, setCorrectionsLoading] = useState<boolean>(false);
-  const [newWrongWord, setNewWrongWord] = useState<string>('');
-  const [newCorrectedWord, setNewCorrectedWord] = useState<string>('');
-  const [isSubmittingCorrection, setIsSubmittingCorrection] = useState<boolean>(false);
-  const [correctionError, setCorrectionError] = useState<string | null>(null);
-
-  // Super Admin state variables (For axiom.data7@gmail.com)
-  const [globalVocabularyList, setGlobalVocabularyList] = useState<any[]>([]);
-  const [globalLoading, setGlobalLoading] = useState<boolean>(false);
-  const [newGlobalEnglish, setNewGlobalEnglish] = useState<string>('');
-  const [newGlobalBurmese, setNewGlobalBurmese] = useState<string>('');
-  const [newGlobalPart, setNewGlobalPart] = useState<string>('Noun');
-  const [newGlobalNotes, setNewGlobalNotes] = useState<string>('');
-  const [isSubmittingGlobal, setIsSubmittingGlobal] = useState<boolean>(false);
-  const [globalError, setGlobalError] = useState<string | null>(null);
-
-  // News workspace save script state
-  const [isSavingToLibrary, setIsSavingToLibrary] = useState<boolean>(false);
-  const [saveToLibrarySuccess, setSaveToLibrarySuccess] = useState<boolean>(false);
+  
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
-  // Monitor Auth State
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setAuthLoading(true);
-       if (user) {
-        setCurrentUser(user);
-        try {
-          const profile = await getOrCreateUserProfile(user);
-          setUserProfile(profile);
-          setTempApiKey(profile.customApiKey || '');
-          setTempOpenAiKey(profile.customOpenAiKey || '');
-          
-          if (profile.customApiKey && profile.customApiKey.trim()) {
-            setCustomApiKeyForGemini(profile.customApiKey.trim());
-          } else {
-            setCustomApiKeyForGemini(undefined);
-          }
-
-          if (profile.customOpenAiKey && profile.customOpenAiKey.trim()) {
-            setCustomApiKeyForOpenAi(profile.customOpenAiKey.trim());
-          } else {
-            setCustomApiKeyForOpenAi(undefined);
-          }
-        } catch (err: any) {
-          console.error("Error creating user profile:", err);
-        }
-      } else {
-        setCurrentUser(null);
-        setUserProfile(null);
-        setCustomApiKeyForGemini(undefined);
-        setCustomApiKeyForOpenAi(undefined);
-      }
-      setAuthLoading(false);
-    });
-    return unsubscribe;
-  }, []);
-
-  // Update backend sync when custom API keys change
-  useEffect(() => {
-    if (userProfile) {
-      if (userProfile.customApiKey) {
-        setCustomApiKeyForGemini(userProfile.customApiKey.trim());
-      } else {
-        setCustomApiKeyForGemini(undefined);
-      }
-      if (userProfile.customOpenAiKey) {
-        setCustomApiKeyForOpenAi(userProfile.customOpenAiKey.trim());
-      } else {
-        setCustomApiKeyForOpenAi(undefined);
-      }
-    } else {
-      setCustomApiKeyForGemini(undefined);
-      setCustomApiKeyForOpenAi(undefined);
-    }
-  }, [userProfile]);
+  const {
+    currentUser,
+    userProfile,
+    setUserProfile,
+    authLoading,
+    authEmail,
+    setAuthEmail,
+    authPassword,
+    setAuthPassword,
+    isSignUpMode,
+    setIsSignUpMode,
+    authError,
+    tempApiKey,
+    setTempApiKey,
+    tempOpenAiKey,
+    setTempOpenAiKey,
+    preferredModel,
+    setPreferredModelLocal,
+    signInWithEmail,
+    signInWithGoogle,
+    signOutUser,
+    saveApiKeys,
+  } = useAuthSession();
 
   // Handle 15-second cooldown counting down every second
   useEffect(() => {
     if (cooldownRemaining <= 0) return;
     const timer = setInterval(() => {
-      setCooldownRemaining(prev => prev - 1);
+      setCooldownRemaining(Math.max(0, cooldownRemaining - 1));
     }, 1000);
     return () => clearInterval(timer);
   }, [cooldownRemaining]);
@@ -259,22 +190,12 @@ const App: React.FC = () => {
 
     const fetchStatus = async () => {
       try {
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
-        };
-        if (currentUser) {
-          const token = await currentUser.getIdToken();
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        if (userProfile?.customApiKey) {
-          headers['x-custom-gemini-key'] = userProfile.customApiKey;
-        }
-
-        const response = await fetch('/api/queue-status', { headers });
-        if (response.ok) {
-          const data = await response.json();
-          setQueueStatus(data);
-        }
+        const data = await api.get<any>('/api/queue-status', {
+          headers: userProfile?.customApiKey
+            ? { 'x-custom-gemini-key': userProfile.customApiKey }
+            : undefined,
+        });
+        setQueueStatus(data);
       } catch (err) {
         console.warn('Failed to fetch queue status:', err);
       }
@@ -300,14 +221,8 @@ const App: React.FC = () => {
     if (!currentUser) return;
     setProfileLoading(true);
     try {
-      const token = await currentUser.getIdToken();
-      const res = await fetch('/api/user/profile', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUserProfileData(data);
-      }
+      const data = await api.get<any>('/api/user/profile');
+      setUserProfileData(data);
     } catch (err) {
       console.error("Failed to fetch user profile data", err);
     } finally {
@@ -315,62 +230,52 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  const fetchSavedScripts = useCallback(async () => {
-    if (!currentUser) return;
-    setScriptsLoading(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const res = await fetch('/api/news-scripts', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSavedScripts(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch saved scripts", err);
-    } finally {
-      setScriptsLoading(false);
-    }
-  }, [currentUser]);
-
-  const fetchUserCorrections = useCallback(async () => {
-    if (!currentUser) return;
-    setCorrectionsLoading(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const res = await fetch('/api/user-corrections', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUserCorrectionsList(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch user corrections", err);
-    } finally {
-      setCorrectionsLoading(false);
-    }
-  }, [currentUser]);
-
-  const fetchGlobalVocabulary = useCallback(async () => {
-    if (!currentUser) return;
-    setGlobalLoading(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const res = await fetch('/api/global-vocabulary', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setGlobalVocabularyList(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch global vocabulary", err);
-    } finally {
-      setGlobalLoading(false);
-    }
-  }, [currentUser]);
+  const libraryFeature = useLibraryFeature({
+    currentUser,
+    onProfileRefresh: fetchUserProfileData,
+  });
+  const correctionsFeature = useCorrectionsFeature({ currentUser });
+  const vocabularyFeature = useVocabularyFeature({ currentUser });
+  const {
+    savedScripts,
+    scriptsLoading,
+    isSavingToLibrary,
+    saveToLibrarySuccess,
+    fetchSavedScripts,
+    saveToLibrary,
+    deleteSavedScript,
+  } = libraryFeature;
+  const {
+    userCorrectionsList,
+    correctionsLoading,
+    newWrongWord,
+    setNewWrongWord,
+    newCorrectedWord,
+    setNewCorrectedWord,
+    isSubmittingCorrection,
+    correctionError,
+    fetchUserCorrections,
+    handleAddUserCorrection,
+    handleToggleCorrection,
+    handleDeleteCorrection,
+  } = correctionsFeature;
+  const {
+    globalVocabularyList,
+    globalLoading,
+    newGlobalEnglish,
+    setNewGlobalEnglish,
+    newGlobalBurmese,
+    setNewGlobalBurmese,
+    newGlobalPart,
+    setNewGlobalPart,
+    newGlobalNotes,
+    setNewGlobalNotes,
+    isSubmittingGlobal,
+    globalError,
+    fetchGlobalVocabulary,
+    handleAddGlobalVocabulary,
+    handleDeleteGlobalVocabulary,
+  } = vocabularyFeature;
 
   // Sync data dynamically based on active tab select
   useEffect(() => {
@@ -386,94 +291,58 @@ const App: React.FC = () => {
     }
   }, [currentUser, activeTab, fetchUserProfileData, fetchSavedScripts, fetchUserCorrections, fetchGlobalVocabulary]);
 
-  // Auth Handlers
-  const handleAuthEmailPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    if (!authEmail || !authPassword) {
-      setAuthError('အီးမေးလ်နှင့် စကားဝှက်ကို ဖြည့်စွက်ပါ။');
-      return;
-    }
-    try {
-      if (isSignUpMode) {
-        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-      } else {
-        await signInWithEmailAndPassword(auth, authEmail, authPassword);
-      }
-    } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/weak-password') {
-        setAuthError('စကားဝှက်သည် အနည်းဆုံး စာလုံး ၆ လုံး ရှိရမည်');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setAuthError('ဤအီးမေးလ်ဖြင့် အကောင့်ဖွင့်ထားပြီး ဖြစ်သည်။');
-      } else if (err.code === 'auth/invalid-credential') {
-        setAuthError('အီးမေးလ် သို့မဟုတ် စကားဝှက် လွဲမှားနေသည်');
-      } else {
-        setAuthError(err.message || 'အကောင့်ဝင်ရောက်မှု မအောင်မြင်ပါ။ ပြန်လည်ကြိုးစားပါ။');
-      }
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setAuthError(null);
-    try {
-      await googleSignIn();
-    } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/popup-closed-by-user' || (err.message && err.message.includes('popup-closed-by-user'))) {
-        setAuthError('အကောင့်ဝင်ရန် ဖွင့်လှစ်ထားသော Window ကို ပိတ်လိုက်သဖြင့် အကောင့်ဝင်ခြင်းမအောင်မြင်ပါ။ ပြန်လည်ကြိုးစားပါ။');
-      } else if (err.code === 'auth/popup-blocked') {
-        setAuthError('Popup blocker ကြောင့် window မပွင့်ပါ။ Browser settings တွင် Popups ခွင့်ပြုပေးပါရန်။');
-      } else {
-        setAuthError(err.message || 'Google OpenID Sign-in failed.');
-      }
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await logoutGoogle();
-      resetOutputs();
-    } catch (err) {
-      console.error("Signout error:", err);
-    }
-  };
-
-  // Profile Custom API Key management
-  const handleSaveApiKey = async () => {
-    if (!currentUser) return;
-    try {
-      await updateUserApiKey(currentUser.uid, tempApiKey);
-      await updateUserOpenAiKey(currentUser.uid, tempOpenAiKey);
-      if (userProfile) {
-        setUserProfile({
-          ...userProfile,
-          customApiKey: tempApiKey,
-          customOpenAiKey: tempOpenAiKey
-        });
-      }
-      if (tempApiKey.trim()) {
-        setCustomApiKeyForGemini(tempApiKey.trim());
-      } else {
-        setCustomApiKeyForGemini(undefined);
-      }
-      if (tempOpenAiKey.trim()) {
-        setCustomApiKeyForOpenAi(tempOpenAiKey.trim());
-      } else {
-        setCustomApiKeyForOpenAi(undefined);
-      }
-      setIsSettingsOpen(false);
-      alert('API KEY သတ်မှတ်ချက်များကို သိမ်းဆည်းပြီးပါပြီ (API Key settings saved successfully!)');
-    } catch (err: any) {
-      console.error(err);
-      alert('ဆက်တင် မှတ်ထားခြင်း မအောင်မြင်ပါ။');
-    }
-  };
-
   const handleAgreePolicy = useCallback(() => {
     localStorage.setItem('mzm_ai_policy_agreed', 'true');
     setIsPolicyOpen(false);
   }, []);
+
+  const handleSignOut = useCallback(async () => {
+    await signOutUser();
+    resetOutputs();
+  }, [resetOutputs, signOutUser]);
+
+  const handleSaveApiKey = useCallback(async () => {
+    try {
+      await saveApiKeys();
+      setIsSettingsOpen(false);
+      alert('API KEY သတ်မှတ်ချက်များကို သိမ်းဆည်းပြီးပါပြီ (API Key settings saved successfully!)');
+    } catch (error) {
+      console.error(error);
+      alert('ဆက်တင် မှတ်ထားခြင်း မအောင်မြင်ပါ။');
+    }
+  }, [saveApiKeys]);
+
+  const workspaceInput = useWorkspaceInput({
+    resetOutputs,
+    generatedScript,
+    error,
+    setError,
+  });
+  const {
+    selectedInputMode,
+    selectedScriptLength,
+    selectedScriptTone,
+    selectedScriptType,
+    fileContent,
+    urlInput,
+    englishUrlInput,
+    reportInput,
+    pastedTextInput,
+    reportTargetLanguage,
+    setReportTargetLanguage,
+    handleInputModeChange,
+    handleScriptLengthChange,
+    handleScriptToneChange,
+    handleScriptTypeChange,
+    handleFileProcessed,
+    handleUrlChange,
+    handleEnglishUrlChange,
+    handleReportChange,
+    handlePastedTextChange,
+    handleFileError,
+    validateInputs,
+    isGenerateDisabled: hasMissingInput,
+  } = workspaceInput;
 
   const handleOpenActiveModuleTips = useCallback(() => {
     let modeTip: ModuleTipType = 'file';
@@ -489,267 +358,32 @@ const App: React.FC = () => {
     setIsTipsOpen(true);
   }, [selectedInputMode]);
 
-  // Reset core outputs
-  const resetOutputs = useCallback((keepError: boolean = false) => {
-    setGeneratedScript(null);
-    setIntermediateTranslation(null);
-    setGroundingSources(null);
-    setProofreadScriptContent(null);
-    setExtractedKeywords(null);
-    setSeoData(null);
-    setCategory(null);
-    setReportStatistics(null);
-    setReportChartData(null);
-    setReportChartTitle(null);
-    setReportChartType(null);
-    setScrapeMethod(null);
-    setScrapeNotice(null);
-    if (!keepError) setError(null);
-    setWasServedFromCache(false);
-  }, []);
-
-  const handleInputModeChange = useCallback((mode: InputMode) => {
-    setSelectedInputMode(mode);
-    resetOutputs();
-    setFileContent(''); 
-    setUrlInput('');
-    setEnglishUrlInput('');
-    setReportInput('');
-    setPastedTextInput('');
-  }, [resetOutputs]);
-
-  const handleScriptLengthChange = useCallback((length: ScriptLength) => {
-    setSelectedScriptLength(length);
-    if (generatedScript) resetOutputs();
-  }, [generatedScript, resetOutputs]);
-
-  const handleScriptToneChange = useCallback((tone: ScriptTone) => {
-    setSelectedScriptTone(tone);
-    if (generatedScript) resetOutputs();
-  }, [generatedScript, resetOutputs]);
-
-  const handleScriptTypeChange = useCallback((type: ScriptType) => {
-    setSelectedScriptType(type);
-    if (generatedScript) resetOutputs();
-  }, [generatedScript, resetOutputs]);
-
-  const handleFileProcessed = useCallback((content: string) => {
-    setFileContent(content);
-    resetOutputs(!!error);
-  }, [error, resetOutputs]); 
-  
-  const handleUrlChange = useCallback((value: string) => {
-    setUrlInput(value);
-    resetOutputs(!!error);
-  }, [error, resetOutputs]);
-
-  const handleEnglishUrlChange = useCallback((value: string) => {
-    setEnglishUrlInput(value);
-    resetOutputs(!!error);
-  }, [error, resetOutputs]);
-
-  const handleReportChange = useCallback((value: string) => {
-    setReportInput(value);
-    resetOutputs(!!error);
-  }, [error, resetOutputs]);
-
-  const handlePastedTextChange = useCallback((value: string) => {
-    setPastedTextInput(value);
-    resetOutputs(!!error);
-  }, [error, resetOutputs]);
-
-  const handleFileError = useCallback((message: string) => {
-    setError(message);
-    setFileContent(''); 
-    resetOutputs(true); 
-  }, [resetOutputs]);
-
-  const validateInputs = (): boolean => {
-    let currentError: string | null = null;
-    const checkUrl = (inputUrl: string) : boolean => {
-      if (!inputUrl.trim()){ return false; }
-      try {
-        new URL(inputUrl); 
-        return true;
-      } catch (e) {
-        return false;
-      }
-    };
-
-    switch (selectedInputMode) {
-      case InputMode.FILE:
-        if (!fileContent.trim()) currentError = 'သတင်းရေးသားရန် မူရင်းဖိုင်တစ်ခု ရွေးချယ် တင်သွင်းပေးပါ။';
-        break;
-      case InputMode.URL:
-        if (!urlInput.trim()) currentError = 'ကျေးဇူးပြု၍ သတင်းဝဘ်လင့်ခ်ကို ထည့်သွင်းပေးပါ။';
-        else if (!checkUrl(urlInput)) currentError = 'ထည့်သွင်းထားသော ဝဘ်လင့်ခ်ပုံစံ လွဲမှားနေပါသည်။ (e.g. https://example.com)';
-        break;
-      case InputMode.REPORT:
-        if (!reportInput.trim()) currentError = 'ဆန်းစစ်ချက် သတင်းရေးရန် အချက်အလက်များ သို့မဟုတ် အစီရင်ခံစာကို ထည့်သွင်းပေးပါ။';
-        break;
-      case InputMode.TRANSLATE_EN_TO_MY:
-        if (!englishUrlInput.trim()) currentError = 'ဘာသာပြန်ရန် အင်္ဂလိပ်သတင်းလင့်ခ်ကို ဖြည့်သွင်းပေးပါ။';
-        else if (!checkUrl(englishUrlInput)) currentError = 'ထည့်သွင်းထားသော အင်္ဂလိပ်ဝဘ်လင့်ခ်ပုံစံ လွဲမှားနေပါသည်။';
-        break;
-      case InputMode.TRANSLATE_MY_TO_EN:
-        if (!urlInput.trim()) currentError = 'သတင်းလင့်ခ်ကို ဖြည့်သွင်းပေးပါ။';
-        else if (!checkUrl(urlInput)) currentError = 'လင့်ခ်ပုံစံ လွဲမှားနေပါသည်။';
-        break;
-      case InputMode.TRANSLATE_TEXT:
-        if (!pastedTextInput.trim()) currentError = 'ဘာသာပြန်ရန် စာသားများကို ကူးယူပြီး ဤနေရာတွင် ထည့်သွင်းပေးပါ။';
-        break;
-    }
-
-    if (currentError) {
-      setError(currentError);
-      return false;
-    }
-    setError(null);
-    return true;
-  };
-
-  const handlePerformTransaction = async (actionFn: () => Promise<any>) => {
-    if (!currentUser) throw new Error('ယခုဝင်သော အကောင့်မရှိပါ။');
-
-    const profileDataRes = await fetch('/api/user/profile', {
-      headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-    });
-    if (!profileDataRes.ok) {
-      throw new Error("ကျေးဇူးပြု၍ စာမျက်နှာကို refresh ပြုလုပ်ပါ");
-    }
-
-    const usageDetail = await profileDataRes.json();
-    const hasCustomKey = userProfile?.customApiKey && userProfile.customApiKey.trim().length > 0;
-    
-    if (!hasCustomKey) {
-      if (usageDetail.usageToday >= usageDetail.limit) {
-        throw new Error('ယနေ့အတွက် အခမဲ့ဆောင်ရွက်ခွင့် (၃၀) ကြိမ် ကုန်ဆုံးသွားပါပြီ။ ဆက်တင် (Settings) တွင် သင်၏ကိုယ်ပိုင် Gemini API Key အခမဲ့ထည့်သွင်း၍ အကန့်အသတ်မရှိ (Unlimited) ဆက်လက် သုံးစွဲနိုင်ပါပြီ။');
-      }
-    }
-    return await actionFn();
-  };
-
-  const handleGenerateScript = async () => {
-    resetOutputs(); 
-    if (!validateInputs()) return;
-    setIsLoading(true);
-    
-    try {
-      let response: GeneratedScriptResponse | null = null;
-      
-      const triggerAction = async () => {
-        switch (selectedInputMode) {
-          case InputMode.FILE:
-            return fileContent ? await generateScriptFromFileContent(fileContent, selectedScriptLength, selectedScriptTone, selectedScriptType) : null;
-          case InputMode.URL:
-            return urlInput ? await generateScriptFromUrl(urlInput, selectedScriptLength, selectedScriptTone, selectedScriptType) : null;
-          case InputMode.REPORT:
-            return reportInput ? await generateScriptFromReport(reportInput, selectedScriptLength, selectedScriptTone, selectedScriptType, reportTargetLanguage) : null;
-          case InputMode.TRANSLATE_EN_TO_MY:
-            return englishUrlInput ? await performEnToMyTranslationAndScriptGeneration(englishUrlInput, selectedScriptLength, selectedScriptTone, selectedScriptType) : null;
-          case InputMode.TRANSLATE_MY_TO_EN:
-            return urlInput ? await performMyToEnTranslationAndScriptGeneration(urlInput, selectedScriptLength, selectedScriptTone, selectedScriptType) : null;
-          case InputMode.TRANSLATE_TEXT:
-            return pastedTextInput ? await translatePastedText(pastedTextInput) : null;
-          default:
-            return null;
-        }
-      };
-
-      response = await handlePerformTransaction(triggerAction);
-
-      if (response?.script) {
-        setGeneratedScript(response.script);
-        setIntermediateTranslation(response.intermediateTranslation || null);
-        setGroundingSources(response.sources || null);
-        setWasServedFromCache(!!response.fromCache);
-
-        setReportStatistics(response.statistics || null);
-        setReportChartData(response.chartData || null);
-        setReportChartTitle(response.chartTitle || null);
-        setReportChartType(response.chartType || null);
-        setScrapeMethod(response.scrapeMethod || null);
-        setScrapeNotice(response.scrapeNotice || null);
-
-        setError(null);
-
-        if (useSEO) {
-          try {
-            const seo = await generateSEOMetadata(response.script);
-            setSeoData(seo || null);
-          } catch (seoErr) {
-            console.error("SEO generation failed:", seoErr);
-          }
-        }
-
-        try {
-          const cat = await categorizeNews(response.script);
-          setCategory(cat);
-        } catch (catErr) {
-          console.error("Categorization failed:", catErr);
-        }
-        
-        setActiveTab('workspace'); // automatically active workspace to see results
-        fetchUserProfileData(); // refresh credits dynamically
-        setCooldownRemaining(15);
-      } else { 
-        setError(UI_STRINGS_MY.ERROR_GENERATING_SCRIPT + " (သက်ဆိုင်ရာ အကြောင်းအရာမရရှိပါ)");
-      }
-    } catch (e: any) {
-      console.error("Generation error:", e);
-      setError(e.message || UI_STRINGS_MY.ERROR_GENERATING_SCRIPT);
-      setGeneratedScript(null);
-      setIntermediateTranslation(null);
-      setGroundingSources(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleProofreadScript = async () => {
-    if (!generatedScript || isLoading || isProofreading) return;
-    setWasServedFromCache(false); 
-    setProofreadScriptContent(null); 
-    setError(null);
-    setIsProofreading(true);
-
-    try {
-      const editAction = async () => {
-        return await proofreadScript(generatedScript);
-      };
-      const editedScript = await handlePerformTransaction(editAction);
-      setProofreadScriptContent(editedScript);
-      setError(null);
-    } catch (e: any) {
-      console.error("Proofreading error:", e);
-      setError(e.message || UI_STRINGS_MY.ERROR_PROOFREADING_SCRIPT);
-      setProofreadScriptContent(null);
-    } finally {
-      setIsProofreading(false);
-    }
-  };
-
-  const handleExtractKeywords = async () => {
-    if (!generatedScript || isLoading || isProofreading || isExtractingKeywords) return;
-    setIsExtractingKeywords(true);
-    setError(null);
-    setExtractedKeywords(null);
-
-    try {
-      const keywordAction = async () => {
-        const mainScript = generatedScript.split(/\n\n---\n/)[0] || '';
-        return await extractKeywords(mainScript);
-      };
-      const keywords = await handlePerformTransaction(keywordAction);
-      setExtractedKeywords(keywords); 
-    } catch (e: any) {
-      console.error("Keyword extraction error:", e);
-      setError(e.message || UI_STRINGS_MY.ERROR_EXTRACTING_KEYWORDS);
-      setExtractedKeywords(null);
-    } finally {
-      setIsExtractingKeywords(false);
-    }
-  };
+  const { handleGenerateScript, handleProofreadScript, handleExtractKeywords } = useGenerationWorkflow({
+    currentUser,
+    userProfile,
+    inputs: {
+      selectedInputMode,
+      selectedScriptLength,
+      selectedScriptTone,
+      selectedScriptType,
+      fileContent,
+      urlInput,
+      englishUrlInput,
+      reportInput,
+      pastedTextInput,
+      reportTargetLanguage,
+    },
+    useSEO,
+    generatedScript,
+    isLoading,
+    isProofreading,
+    isExtractingKeywords,
+    resetOutputs,
+    validateInputs,
+    setActiveTab,
+    onProfileRefresh: fetchUserProfileData,
+    setters: generationActions,
+  });
 
   const handleClearCache = () => {
     clearAppCache();
@@ -758,15 +392,7 @@ const App: React.FC = () => {
 
   const isGenerateDisabled = (): boolean => {
     if (isLoading || isProofreading || cooldownRemaining > 0) return true; 
-    switch (selectedInputMode) {
-      case InputMode.FILE: return !fileContent.trim();
-      case InputMode.URL: return !urlInput.trim();
-      case InputMode.REPORT: return !reportInput.trim();
-      case InputMode.TRANSLATE_EN_TO_MY: return !englishUrlInput.trim();
-      case InputMode.TRANSLATE_MY_TO_EN: return !urlInput.trim();
-      case InputMode.TRANSLATE_TEXT: return !pastedTextInput.trim();
-      default: return true;
-    }
+    return hasMissingInput();
   };
 
   const downloadFile = (content: string | null, baseFileName: string, extension: 'txt') => {
@@ -791,59 +417,19 @@ const App: React.FC = () => {
   // Saved news custom database actions
   const handleSaveToLibrary = async () => {
     if (!currentUser || !generatedScript) return;
-    setIsSavingToLibrary(true);
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch('/api/news-scripts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          title: seoData?.optimizedTitle || generatedScript.split('\n')[0]?.substring(0, 100) || "ခေါင်းစဉ်မရှိ သတင်းစာမူ",
-          content: generatedScript,
-          category: category || "သတင်းတို",
-          originalInput: fileContent || urlInput || reportInput || pastedTextInput || "သတင်းအချက်အလက်မြန်မာ",
-          scriptType: selectedScriptType,
-        }),
+      await saveToLibrary({
+        title: seoData?.optimizedTitle || generatedScript.split('\n')[0]?.substring(0, 100) || "ခေါင်းစဉ်မရှိ သတင်းစာမူ",
+        content: generatedScript,
+        category: category || "သတင်းတို",
+        originalInput: fileContent || urlInput || reportInput || pastedTextInput || "သတင်းအချက်အလက်မြန်မာ",
+        scriptType: selectedScriptType,
       });
-
-      if (!response.ok) {
-        throw new Error("ကျေးဇူးပြု၍ နောက်တစ်ကြိမ်ကြိုးစားပါ။ စာမူသိမ်းဆည်းမရပါ။");
-      }
-
-      setSaveToLibrarySuccess(true);
-      fetchUserProfileData(); // update daily credits dynamically
-      setTimeout(() => setSaveToLibrarySuccess(false), 3000);
     } catch (err: any) {
       alert(err.message);
-    } finally {
-      setIsSavingToLibrary(false);
     }
   };
-
-  const handleDeleteSavedScript = async (id: number) => {
-    if (!currentUser) return;
-    if (!window.confirm("ဤသတင်းဆောင်းပါးကိုမှ လုံးဝပယ်ဖျက်ရန် အတည်ပြုပါသလား?")) return;
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/news-scripts/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        fetchSavedScripts();
-        fetchUserProfileData();
-      } else {
-        alert("မအောင်မြင်ပါ။");
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const handleDeleteSavedScript = deleteSavedScript;
 
   const handleOpenScriptFromLibrary = (scriptItem: any) => {
     setGeneratedScript(scriptItem.content);
@@ -886,138 +472,6 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Add a personal word correction rule from the form
-  const handleAddUserCorrection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCorrectionError(null);
-    if (!newWrongWord.trim() || !newCorrectedWord.trim()) {
-      setCorrectionError("ကျေးဇူးပြု၍ စကားလုံးအလွဲနှင့် စကားလုံးအမှန် နှစ်ဖက်စလုံးကို ယှဉ်တွဲဖြည့်စွက်ပေးပါ။");
-      return;
-    }
-    setIsSubmittingCorrection(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch('/api/user-corrections', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          originalWord: newWrongWord.trim(),
-          correctedWord: newCorrectedWord.trim()
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("ပြင်ဆင်ချက်အသစ် ထည့်သွင်းမရပါ။ စကားလုံး ထပ်နေခြင်း ဖြစ်နိုင်ပါသည်။");
-      }
-
-      setNewWrongWord('');
-      setNewCorrectedWord('');
-      fetchUserCorrections();
-    } catch (err: any) {
-      setCorrectionError(err.message);
-    } finally {
-      setIsSubmittingCorrection(false);
-    }
-  };
-
-  const handleToggleCorrection = async (id: number, currentEnabled: boolean) => {
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/user-corrections/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ isEnabled: !currentEnabled })
-      });
-      if (response.ok) {
-        fetchUserCorrections();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleDeleteCorrection = async (id: number) => {
-    if (!window.confirm("ဤပြင်ဆင်မှုစည်းကမ်းကို လုံးဝဖြုတ်ပစ်ရန် သေချာပါသလား?")) return;
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/user-corrections/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        fetchUserCorrections();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Global words dictionary actions (Super Admin strictly axiom.data7@gmail.com)
-  const handleAddGlobalVocabulary = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGlobalError(null);
-    if (!newGlobalEnglish.trim() || !newGlobalBurmese.trim()) {
-      setGlobalError("English စကားလုံးနှင့် မြန်မာဘာသာပြန်ချက် နှစ်ခုလုံး ဖြည့်ရပါမည်။");
-      return;
-    }
-    setIsSubmittingGlobal(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch('/api/global-vocabulary', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          englishWord: newGlobalEnglish.trim(),
-          burmeseTranslation: newGlobalBurmese.trim(),
-          partOfSpeech: newGlobalPart,
-          notes: newGlobalNotes.trim()
-        })
-      });
-
-      if (!response.ok) {
-        const errorJson = await response.json().catch(() => ({}));
-        throw new Error(errorJson.error || "ကမ္ဘာ့အဆင့်ပြင်ဆင်ချက်သိမ်းမရပါ။");
-      }
-
-      setNewGlobalEnglish('');
-      setNewGlobalBurmese('');
-      setNewGlobalNotes('');
-      fetchGlobalVocabulary();
-    } catch (err: any) {
-      setGlobalError(err.message);
-    } finally {
-      setIsSubmittingGlobal(false);
-    }
-  };
-
-  const handleDeleteGlobalVocabulary = async (id: number) => {
-    if (!window.confirm("ဤဂလိုဘယ်ဝေါဟာရကို ဖျက်ဆီးရန် အတည်ပြုပါသလား?")) return;
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/global-vocabulary/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        fetchGlobalVocabulary();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
   
   const getButtonText = () => {
     if (cooldownRemaining > 0) {
@@ -1112,7 +566,7 @@ const App: React.FC = () => {
             </p>
           </div>
 
-          <form className="mt-6 space-y-5" onSubmit={handleAuthEmailPassword}>
+          <form className="mt-6 space-y-5" onSubmit={signInWithEmail}>
             <div className="rounded-md space-y-4">
               <div className="space-y-1">
                 <label className="block text-[10px] uppercase font-bold tracking-wider text-zinc-400 font-serif">
@@ -1167,7 +621,7 @@ const App: React.FC = () => {
 
           <div className="space-y-3">
             <button
-              onClick={handleGoogleSignIn}
+              onClick={signInWithGoogle}
               type="button"
               className="w-full flex items-center justify-center gap-2 py-3 px-4 text-xs font-bold rounded-lg bg-zinc-950 hover:bg-zinc-805 border border-zinc-800 text-zinc-200 transition-all font-serif cursor-pointer select-none"
             >
