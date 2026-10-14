@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Noto+Sans+Myanmar:wght@400;700&family=Noto+Serif+Myanmar:wght@400;700&family=Padauk:wght@400;700&display=swap');
+
+@theme {
+  --font-sans: "Noto Sans Myanmar", "Padauk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Noto Serif Myanmar", "Playfair Display", "Charter", Georgia, serif;
+  --font-newspaper-title: "Playfair Display", "Noto Serif Myanmar", serif;
+  --font-newspaper-body: "Noto Sans Myanmar", "Padauk", "Charter", serif;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}

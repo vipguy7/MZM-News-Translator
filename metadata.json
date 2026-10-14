@@ -1,0 +1,9 @@
+{
+  "name": "Burmese Newsroom AI Workspace",
+  "description": "Burmese Language Newsroom AI workspace matching Mizzima guidelines. Features a user library, personal dictionary spelling corrections, custom translation glossaries, and advanced SEO key tag generation using Gemini Flash UI.",
+  "requestFramePermissions": [],
+  "prompt": "",
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

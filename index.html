@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="my">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Burmese Newsroom AI Workspace</title>
+    <meta name="description" content="Burmese Language Newsroom AI workspace matching Mizzima guidelines. Features a user library, personal dictionary spelling corrections, custom translation glossaries, and advanced SEO key tag generation using Gemini Flash UI." />
+    <meta property="og:title" content="Burmese Newsroom AI Workspace" />
+    <meta property="og:description" content="Burmese Language Newsroom AI workspace matching Mizzima guidelines. Features a user library, personal dictionary spelling corrections, custom translation glossaries, and advanced SEO key tag generation using Gemini Flash UI." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@100..900&family=Noto+Serif+Myanmar:wght@100..900&family=Lora:ital,wght@0,400..700;1,400..700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+    <style>
+      /* Custom scrollbar for webkit browsers */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f0f9ff; /* sky-50 */
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #60a5fa; /* blue-400 */
+        border-radius: 10px;
+        border: 2px solid #f0f9ff; /* Track color for padding */
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #3b82f6; /* blue-500 */
+      }
+      body {
+        font-family: 'Noto Sans Myanmar', 'Lora', 'Georgia', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Noto Serif Myanmar', 'Playfair Display', 'Georgia', serif;
+      }
+      .font-newspaper-title {
+        font-family: 'Noto Serif Myanmar', 'Playfair Display', 'Georgia', serif;
+      }
+      .font-newspaper-body {
+        font-family: 'Noto Sans Myanmar', 'Lora', 'Georgia', sans-serif;
+      }
+      /* 
+        Enhanced focus style for accessibility.
+        Using !important to ensure this visible style overrides any conflicting
+        utility classes (like Tailwind's focus:outline-none) across the application,
+        providing a consistent and clear focus indicator for keyboard users.
+      */
+      *:focus-visible {
+        outline: 2px solid #2563eb !important; /* blue-600 */
+        outline-offset: 2px !important;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3) !important; /* Lighter blue shadow */
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-50 text-zinc-900 selection:bg-zinc-900 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

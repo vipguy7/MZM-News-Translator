@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a registered user of the system along with their AI credit state and optional custom API key.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "credits": {
+          "type": "integer"
+        },
+        "customApiKey": {
+          "type": "string",
+          "description": "User self-provided Gemini API key to avoid consuming system credits"
+        },
+        "lastDailyReset": {
+          "type": "string",
+          "description": "The date when credits were last reset (YYYY-MM-DD)"
+        }
+      },
+      "required": [
+        "email",
+        "credits"
+      ]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection holding auth context, credit counters, and custom Gemini API keys."
+    }
+  }
+}
